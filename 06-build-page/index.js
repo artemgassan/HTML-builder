@@ -3,11 +3,12 @@ const fsp = require('fs').promises;
 const path = require('path');
 
 const assetsPath = path.resolve(__dirname, 'assets');
-// const componentsPath = path.resolve(__dirname, 'components');
+const componentsPath = path.resolve(__dirname, 'components');
 const stylesPath = path.resolve(__dirname, 'styles');
-// const testFilesPath = path.resolve(__dirname, 'test-files');
 const projectDistPath = path.resolve(__dirname, 'project-dist');
 const assetsDistPath = path.resolve(__dirname, 'project-dist', 'assets');
+const templatePath = path.resolve(__dirname, 'template.html');
+const bundleHTMLPath = path.resolve(projectDistPath, 'index.html');
 
 async function copyDir() {
   try {
@@ -81,7 +82,37 @@ async function bundle(from, to) {
   }
 }
 
+async function generateHTML(templatePath, componentsPath, bundlePath) {
+  try {
+    const templateContent = await fsp.readFile(templatePath, 'utf-8');
+    let resultContent = templateContent;
+    const matches = templateContent.match(/{{\s*[\w-]+\s*}}/g);
+
+    if (matches) {
+      for (const match of matches) {
+        const componentName = match.replace(/{{\s*|\s*}}/g, '').trim();
+        const componentPath = path.join(
+          componentsPath,
+          `${componentName}.html`,
+        );
+
+        try {
+          const componentContent = await fsp.readFile(componentPath, 'utf-8');
+          resultContent = resultContent.replace(match, componentContent);
+        } catch (error) {
+          console.log(error.message);
+        }
+      }
+    }
+
+    await fsp.writeFile(bundlePath, resultContent, 'utf-8');
+  } catch (error) {
+    console.log(error.message);
+  }
+}
+
 (async function buildProject() {
   await copyDir();
   await bundle(stylesPath, projectDistPath);
+  await generateHTML(templatePath, componentsPath, bundleHTMLPath);
 })();

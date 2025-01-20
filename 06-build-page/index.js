@@ -1,18 +1,19 @@
-const fs = require('fs').promises;
+const fs = require('fs');
+const fsp = require('fs').promises;
 const path = require('path');
 
 const assetsPath = path.resolve(__dirname, 'assets');
 // const componentsPath = path.resolve(__dirname, 'components');
-// const stylesPath = path.resolve(__dirname, 'styles');
+const stylesPath = path.resolve(__dirname, 'styles');
 // const testFilesPath = path.resolve(__dirname, 'test-files');
 const projectDistPath = path.resolve(__dirname, 'project-dist');
 const assetsDistPath = path.resolve(__dirname, 'project-dist', 'assets');
 
 async function copyDir() {
   try {
-    await fs.mkdir(projectDistPath, { recursive: true });
+    await fsp.mkdir(projectDistPath, { recursive: true });
     await deleteFiles(projectDistPath);
-    await fs.mkdir(assetsDistPath, { recursive: true });
+    await fsp.mkdir(assetsDistPath, { recursive: true });
     await copyFiles(assetsPath, assetsDistPath);
   } catch (error) {
     console.log(error.message);
@@ -21,15 +22,15 @@ async function copyDir() {
 
 async function deleteFiles(distPath) {
   try {
-    const items = await fs.readdir(distPath, { withFileTypes: true });
+    const items = await fsp.readdir(distPath, { withFileTypes: true });
     await Promise.all(
       items.map(async (item) => {
         const itemPath = path.join(distPath, item.name);
         if (item.isDirectory()) {
           await deleteFiles(itemPath);
-          await fs.rmdir(itemPath);
+          await fsp.rmdir(itemPath);
         } else {
-          await fs.unlink(itemPath);
+          await fsp.unlink(itemPath);
         }
       }),
     );
@@ -41,16 +42,16 @@ async function deleteFiles(distPath) {
 
 async function copyFiles(srcPath, distPath) {
   try {
-    const items = await fs.readdir(srcPath, { withFileTypes: true });
+    const items = await fsp.readdir(srcPath, { withFileTypes: true });
     await Promise.all(
       items.map(async (item) => {
         const srcItemPath = path.join(srcPath, item.name);
         const distItemPath = path.join(distPath, item.name);
         if (item.isDirectory()) {
-          await fs.mkdir(distItemPath, { recursive: true });
+          await fsp.mkdir(distItemPath, { recursive: true });
           await copyFiles(srcItemPath, distItemPath);
         } else {
-          await fs.copyFile(srcItemPath, distItemPath);
+          await fsp.copyFile(srcItemPath, distItemPath);
         }
       }),
     );
@@ -60,4 +61,27 @@ async function copyFiles(srcPath, distPath) {
   }
 }
 
-copyDir();
+async function bundle(from, to) {
+  try {
+    const styleFiles = await fsp.readdir(from, {
+      withFileTypes: true,
+    });
+
+    const outputStream = fs.createWriteStream(path.join(to, 'style.css'));
+
+    for (const file of styleFiles) {
+      if (path.extname(file.name) === '.css' && file.isFile()) {
+        const filePath = path.join(from, file.name);
+        const bundle = await fsp.readFile(filePath, 'utf-8');
+        outputStream.write(bundle + '\n');
+      }
+    }
+  } catch (error) {
+    console.log(error.message);
+  }
+}
+
+(async function buildProject() {
+  await copyDir();
+  await bundle(stylesPath, projectDistPath);
+})();
